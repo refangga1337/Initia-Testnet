@@ -46,33 +46,6 @@ sudo ln -s $HOME/.initia/cosmovisor/current/bin/initiad /usr/local/bin/initiad -
 cd $HOME
 ```
 
-## Install Cosmovisor
-
-```
-go install cosmossdk.io/tools/cosmovisor/cmd/cosmovisor@v1.5.0
-sudo tee /etc/systemd/system/initia.service > /dev/null << EOF
-[Unit]
-Description=initia node service
-After=network-online.target
- 
-[Service]
-User=$USER
-ExecStart=$(which cosmovisor) run start
-Restart=on-failure
-RestartSec=10
-LimitNOFILE=65535
-Environment="DAEMON_HOME=$HOME/.initia"
-Environment="DAEMON_NAME=initiad"
-Environment="UNSAFE_SKIP_BACKUP=true"
-Environment="DAEMON_RESTART_AFTER_UPGRADE=true"
- 
-[Install]
-WantedBy=multi-user.target
-EOF
-sudo systemctl daemon-reload
-sudo systemctl enable initia
-```
-
 ## Initialize Node
 * Replace `YourName` with your Moniker
 ```
@@ -109,4 +82,90 @@ echo 'export initia="106"' >> ~/.bash_profile
 source $HOME/.bash_profile
 sed -i -e "s%^proxy_app = \"tcp://127.0.0.1:26658\"%proxy_app = \"tcp://0.0.0.0:${initia}58\"%; s%^laddr = \"tcp://127.0.0.1:26657\"%laddr = \"tcp://0.0.0.0:${initia}57\"%; s%^pprof_laddr = \"localhost:6060\"%pprof_laddr = \"localhost:${initia}60\"%; s%^laddr = \"tcp://0.0.0.0:26656\"%laddr = \"tcp://0.0.0.0:${initia}56\"%; s%^prometheus_listen_addr = \":26660\"%prometheus_listen_addr = \":${initia}60\"%" $HOME/.initia/config/config.toml
 sed -i -e "s%^address = \"tcp://localhost:1317\"%address = \"tcp://0.0.0.0:${initia}17\"%; s%^address = \":8080\"%address = \":${initia}80\"%; s%^address = \"localhost:9090\"%address = \"0.0.0.0:${initia}90\"%; s%^address = \"0.0.0.0:9091\"%address = \"0.0.0.0:${initia}91\"%; s%:8545%:${initia}45%; s%:8546%:${initia}46%; s%:6065%:${initia}65%" $HOME/.initia/config/app.toml
+```
+## Config Pruning
+```
+sed -i -e "s/^pruning *=.*/pruning = \"custom\"/" $HOME/.initia/config/app.toml
+sed -i -e "s/^pruning-keep-recent *=.*/pruning-keep-recent = \"100\"/" $HOME/.initia/config/app.toml
+sed -i -e "s/^pruning-interval *=.*/pruning-interval = \"50\"/" $HOME/.initia/config/app.toml
+```
+## set minimum gas price, enable prometheus and disable indexing
+```
+sed -i -e "s|^minimum-gas-prices *=.*|minimum-gas-prices = \"0.15uinit,0.01uusdc\"|" $HOME/.initia/config/app.toml
+sed -i -e "s/prometheus = false/prometheus = true/" $HOME/.initia/config/config.toml
+sed -i -e "s/^indexer *=.*/indexer = \"null\"/" $HOME/.initia/config/config.toml
+```
+## Create Service File
+```
+sudo tee /etc/systemd/system/initiad.service > /dev/null <<EOF
+[Unit]
+Description=Initia node
+After=network-online.target
+[Service]
+User=$USER
+WorkingDirectory=$HOME/.initia
+ExecStart=$(which initiad) start --home $HOME/.initia
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65535
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+## Enable & Start Service
+```
+sudo systemctl daemon-reload
+sudo systemctl enable initiad
+sudo systemctl start initiad && sudo journalctl -fu initiad -f -o cat
+```
+
+# Please wait until your nodes sync well
+
+## Create Wallet 
+```
+initiad keys add wallet
+```
+## If you want to import your pharse
+```
+initiad keys add $WALLET --recover
+```
+# Request Test Tokens
+You can Request your tokens [Here](https://faucet.testnet.initia.xyz/)
+
+## Save wallet and validator address
+```
+WALLET_ADDRESS=$(initiad keys show $WALLET -a)
+VALOPER_ADDRESS=$(initiad keys show $WALLET --bech val -a)
+echo "export WALLET_ADDRESS="$WALLET_ADDRESS >> $HOME/.bash_profile
+echo "export VALOPER_ADDRESS="$VALOPER_ADDRESS >> $HOME/.bash_profile
+source $HOME/.bash_profile
+```
+
+## Check Node Status
+```
+initiad status 2>&1 | jq
+```
+## Check your Balance
+```
+initiad q bank balances $(initiad keys show wallet -a)
+```
+# *If your node is fully synchronized and your balance is sufficient, you can create a validator*
+
+```
+initiad tx mstaking create-validator \
+--amount 1000000uinit \
+--pubkey $(initiad tendermint show-validator) \
+--moniker "YOUR_MONIKER_NAME" \
+--identity "YOUR_KEYBASE_ID" \
+--details "YOUR_DETAILS" \
+--website "YOUR_WEBSITE_URL" \
+--chain-id initiation-1 \
+--commission-rate 0.05 \
+--commission-max-rate 0.20 \
+--commission-max-change-rate 0.05 \
+--from wallet \
+--gas-adjustment 1.4 \
+--gas auto \
+--gas-prices 0.15uinit \
+-y
 ```
