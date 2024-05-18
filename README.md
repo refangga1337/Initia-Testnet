@@ -121,7 +121,7 @@ sudo systemctl start initiad && sudo journalctl -fu initiad -f -o cat
 
 # Please wait until your nodes sync well
 
-## Create Wallet 
+## Create Wallet (PLEASE BACKUP THE MNEMONIC!!!!)
 ```
 initiad keys add wallet
 ```
@@ -145,6 +145,21 @@ source $HOME/.bash_profile
 ```
 initiad status 2>&1 | jq
 ```
+## Check Logs
+```
+journalctl -fu initiad -f -o cat
+```
+
+## Check Blocks Left
+```
+local_height=$(initiad status | jq -r .sync_info.latest_block_height)
+network_height=$(curl -s https://rpc-initia-testnet.trusted-point.com/status | jq -r .result.sync_info.latest_block_height)
+blocks_left=$((network_height - local_height))
+echo "Your node height: $local_height"
+echo "Network height: $network_height"
+echo "Blocks left: $blocks_left"
+```
+
 ## Check your Balance
 ```
 initiad q bank balances $(initiad keys show wallet -a)
@@ -168,4 +183,9 @@ initiad tx mstaking create-validator \
 --gas auto \
 --gas-prices 0.15uinit \
 -y
+```
+
+# Backup Your Key
+```
+cat $HOME/.initia/config/priv_validator_key.json
 ```
